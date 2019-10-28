@@ -54,6 +54,8 @@ in
       | App of 'a t * 'a t
       | Arrow of 'a t * 'a t
       | Record of 'a t R.t
+      | Forall of kind * ('a -> 'a t)
+      | Exist of kind * ('a -> 'a t)
 
     signature TQ = sig
       val v : 'a t
@@ -85,17 +87,21 @@ in
 
       fun show_var n = "t" <> Int.toString n
 
-      fun loop _ (Var(s)) = s
-        | loop m (Abs(k, f)) =
-          let
-            val n = !r
-            val () = r := n + 1
-          in
-            paren (0 < m) $ "λ" <> show_var n <+> ":" <+> show_kind k <> "." <+> loop 0 (show_var n |> f)
-          end
+      fun with_inc f =
+      let
+        val n = !r
+        val () = r := n + 1
+      in
+        f n
+      end
+
+      fun loop _ (Var(s))          = s
+        | loop m (Abs(k, f))       = with_inc (fn n => paren (0 < m) $ "λ" <> show_var n <+> ":" <+> show_kind k <> "." <+> loop 0 (show_var n |> f))
+        | loop m (Forall(k, f))    = with_inc (fn n => paren (0 < m) $ "∀" <> show_var n <+> ":" <+> show_kind k <> "." <+> loop 0 (show_var n |> f))
+        | loop m (Exist(k, f))     = with_inc (fn n => paren (0 < m) $ "∃" <> show_var n <+> ":" <+> show_kind k <> "." <+> loop 0 (show_var n |> f))
         | loop n (App(ty1, ty2))   = paren (4 < n) $ loop 4 ty1 <+> loop 5 ty2
         | loop n (Arrow(ty1, ty2)) = paren (2 < n) $ loop 3 ty1 <+> "->" <+> loop 2 ty2
-        | loop _ (Record(m)) =
+        | loop _ (Record(m))       =
         let
           fun f l ty = Label.show l <> ":" <+> loop 0 ty
         in
